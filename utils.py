@@ -83,6 +83,25 @@ def batch_iter(data, batch_size=32, shuffle=True):
         yield sentences, tags
 
 
+def batch_iter_inf(data, batch_size=32, shuffle=True):
+    """ Yield batch of (sent, tag), by the reversed order of source length.
+    Args:
+        data: list of tuples, each tuple contains a sentence and corresponding tag.
+        batch_size: batch size
+        shuffle: bool value, whether to random shuffle the data
+    """
+    data_size = len(data)
+    indices = list(range(data_size))
+    if shuffle:
+        random.shuffle(indices)
+    batch_num = (data_size + batch_size - 1) // batch_size
+    for i in range(batch_num):
+        batch = [data[idx] for idx in indices[i * batch_size: (i + 1) * batch_size]]
+        batch = sorted(batch, key=lambda x: len(x[0]), reverse=True)
+        sentences = [x[0] for x in batch]
+        yield sentences
+
+
 def words2indices(origin, vocab):
     """ Transform a sentence or a list of sentences from str to int
     Args:

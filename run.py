@@ -2,7 +2,7 @@
 Usage:
     run.py train TRAIN SENT_VOCAB TAG_VOCAB [options]
     run.py test TEST RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
-    run.py predict INF RESULT SENT_VOCAB MODEL
+    run.py inf INF RESULT SENT_VOCAB MODEL [options]
 
 Options:
     --dropout-rate=<float>              dropout rate [default: 0.5]
@@ -184,7 +184,7 @@ def predict(args):
     result_file = open(args['RESULT'], 'w')
     model.eval()
     with torch.no_grad():
-        for sentences in utils.batch_iter(test_data, batch_size=int(args['--batch-size']), shuffle=False):
+        for sentences in utils.batch_iter_inf(test_data, batch_size=int(args['--batch-size']), shuffle=False):
             padded_sentences, sent_lengths = utils.pad(sentences, sent_vocab[sent_vocab.PAD], device)
             predicted_tags = model.predict(padded_sentences, sent_lengths)
             for sent, pred_tags in zip(sentences, predicted_tags):
