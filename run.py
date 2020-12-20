@@ -2,7 +2,7 @@
 Usage:
     run.py train TRAIN SENT_VOCAB TAG_VOCAB [options]
     run.py test TEST RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
-    run.py inf INF RESULT SENT_VOCAB MODEL [options]
+    run.py inf INF RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
 
 Options:
     --dropout-rate=<float>              dropout rate [default: 0.5]
@@ -171,6 +171,7 @@ def predict(args):
     """
     sent_vocab = Vocab.load(args['SENT_VOCAB'])
     # add in directory of the inference dataset
+    tag_vocab = Vocab.load(args['TAG_VOCAB'])
     sentences = utils.read_inference(args['INF'])
     sentences = utils.words2indices(sentences, sent_vocab)
     test_data = list(zip(sentences))
