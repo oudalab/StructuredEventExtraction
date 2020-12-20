@@ -26,6 +26,22 @@ def read_corpus(filepath):
     return sentences, tags
 
 
+def read_inference(filepath):
+    sentences = []
+    sent= ['<START>']
+    with open(filepath, 'r', encoding='utf8') as f:
+        for line in f:
+            if line == '\n':
+                if len(sent) > 1:
+                    sentences.append(sent + ['<END>'])
+                sent = ['<START>']
+            else:
+                line = line.split()
+                sent.append(line[0])
+    return sentences
+
+
+
 def generate_train_dev_dataset(filepath, sent_vocab, tag_vocab, train_proportion=0.8):
     """ Read corpus from given file path and split it into train and dev parts
     Args:

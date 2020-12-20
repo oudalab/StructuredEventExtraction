@@ -14,7 +14,7 @@ sh run.sh train
 ```
 For those who are not able to use GPU, use the following command to train:
 ```
-sh run.sh train-without-cuda:q
+sh run.sh train-without-cuda
 ```
 For testing, you can use the following command:
 ```

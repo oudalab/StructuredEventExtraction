@@ -10,6 +10,9 @@ elif [ "$1" = "test" ]
 then
   python run.py test ./data/test.txt ./result.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
   perl conlleval.pl < result.txt
+elif [ "$1" = "inf" ]
+then
+  python run.py inf ./data/inf.txt ./result_inf.txt ./vocab/sent_vocab.json ./model/model.pth --cuda
 elif [ "$1" = "test-without-cuda" ]
 then
   python run.py test ./data/test.txt ./result.txt  ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth

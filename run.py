@@ -2,6 +2,7 @@
 Usage:
     run.py train TRAIN SENT_VOCAB TAG_VOCAB [options]
     run.py test TEST RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
+    run.py predict INF RESULT SENT_VOCAB MODEL
 
 Options:
     --dropout-rate=<float>              dropout rate [default: 0.5]
@@ -162,6 +163,38 @@ def test(args):
                 result_file.write('\n')
 
 
+def predict(args):
+    """
+    make inference with the trained model
+    :param args:
+    :return:
+    """
+    sent_vocab = Vocab.load(args['SENT_VOCAB'])
+    # add in directory of the inference dataset
+    sentences = utils.read_inference(args['INF'])
+    sentences = utils.words2indices(sentences, sent_vocab)
+    test_data = list(zip(sentences))
+    print('num of test samples: %d' % (len(test_data)))
+
+    device = torch.device('cuda' if args['--cuda'] else 'cpu')
+    model = bilstm_crf.BiLSTMCRF.load(args['MODEL'], device)
+    print('start testing...')
+    print('using device', device)
+
+    result_file = open(args['RESULT'], 'w')
+    model.eval()
+    with torch.no_grad():
+        for sentences in utils.batch_iter(test_data, batch_size=int(args['--batch-size']), shuffle=False):
+            padded_sentences, sent_lengths = utils.pad(sentences, sent_vocab[sent_vocab.PAD], device)
+            predicted_tags = model.predict(padded_sentences, sent_lengths)
+            for sent, pred_tags in zip(sentences, predicted_tags):
+                sent, pred_tags = sent[1: -1], pred_tags[1: -1]
+                for token, pred_tag in zip(sent, pred_tags):
+                    result_file.write(' '.join([sent_vocab.id2word(token),
+                                                tag_vocab.id2word(pred_tag)]) + '\n')
+                result_file.write('\n')
+
+
 def cal_dev_loss(model, dev_data, batch_size, sent_vocab, tag_vocab, device):
     """ Calculate loss on the development data
     Args:
@@ -198,6 +231,8 @@ def main():
         train(args)
     elif args['test']:
         test(args)
+    elif args['inf']:
+        predict(args)
 
 
 if __name__ == '__main__':
