@@ -63,6 +63,15 @@ def generate_train_dev_dataset(filepath, sent_vocab, tag_vocab, train_proportion
     return train_data, dev_data
 
 
+def generate_train_or_dev_dataset(filepath, sent_vocab, tag_vocab):
+    sentences, tags = read_corpus(filepath)
+    sentences = words2indices(sentences, sent_vocab)
+    tags = words2indices(tags, tag_vocab)
+    data = list(zip(sentences, tags))
+    random.shuffle(data)
+    return data
+
+
 def batch_iter(data, batch_size=32, shuffle=True):
     """ Yield batch of (sent, tag), by the reversed order of source length.
     Args:

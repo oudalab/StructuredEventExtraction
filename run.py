@@ -1,6 +1,6 @@
 """
 Usage:
-    run.py train TRAIN SENT_VOCAB TAG_VOCAB [options]
+    run.py train TRAIN DEV SENT_VOCAB TAG_VOCAB [options]
     run.py test TEST RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
     run.py inf INF RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
 
@@ -40,7 +40,9 @@ def train(args):
     """
     sent_vocab = Vocab.load(args['SENT_VOCAB'])
     tag_vocab = Vocab.load(args['TAG_VOCAB'])
-    train_data, dev_data = utils.generate_train_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
+    #train_data, dev_data = utils.generate_train_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
+    train_data = utils.generate_train_or_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
+    dev_data = utils.generate_train_or_dev_dataset(args['DEV'], sent_vocab, tag_vocab)
     print('num of training examples: %d' % (len(train_data)))
     print('num of development examples: %d' % (len(dev_data)))
 

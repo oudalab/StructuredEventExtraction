@@ -31,6 +31,11 @@ If you want to change some hyper-parameters, use the following command to refer 
 python run.py --help
 ```
 
+Generate the vocab related information
+```
+ppython3 vocab.py "/home/ubuntu/ynliang/bilstm_crf_pytorch/StructuredEventExtraction/data/train_mavendata.txt" "/home/ubuntu/ynliang/bilstm_crf_pytorch/StructuredEventExtraction/vocab/sent_vocab.json" "/home/ubuntu/ynliang/bilstm_crf_pytorch/StructuredEventExtraction/vocab/tag_vocab.json"
+```
+
 ## Result
 We use `conlleval.pl` to evaluate the model's performance on test data, and
 the experiment result on testing data of the trained model is as follows:
