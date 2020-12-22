@@ -1,4 +1,5 @@
 # Structure Aware Event Extraction
+Using Structured information to enhance the event extraction performance
 This is a Pytorch implementation of BiLSTM-CRF for Named Entity Recognition, which is described in [Bidirectional LSTM-CRF Models for Sequence Tagging](https://arxiv.org/abs/1508.01991)
 
 ## Data
