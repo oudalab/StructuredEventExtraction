@@ -15,6 +15,9 @@ then
   python run.py inf ./data/inf.txt ./result_inf.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
 elif [ "$1" = "test-without-cuda" ]
 then
+  python run.py infid ./data/test_mavendata_documentid.txt ./result_docid.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
+elif [ "$1" = "test-without-cuda" ]
+then
   python run.py test ./data/test.txt ./result.txt  ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth
   perl conlleval.pl < result.txt
 elif [ "$1" = "vocab" ]
