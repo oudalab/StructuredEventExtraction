@@ -208,7 +208,7 @@ def predict_documentid(args):
     sent_vocab = Vocab.load(args['SENT_VOCAB'])
     # add in directory of the inference dataset
     tag_vocab = Vocab.load(args['TAG_VOCAB'])
-    sentences = utils.read_inference(args['INF'])
+    sentences, ids = utils.read_inference(args['INF'])
     sentences = utils.words2indices(sentences, sent_vocab)
     test_data = list(zip(sentences))
     print('num of test samples: %d' % (len(test_data)))

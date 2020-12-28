@@ -13,9 +13,9 @@ then
 elif [ "$1" = "inf" ]
 then
   python run.py inf ./data/inf.txt ./result_inf.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
-elif [ "$1" = "test-without-cuda" ]
+elif [ "$1" = "infid" ]
 then
-  python run.py infid ./data/test_mavendata_documentid.txt ./result_docid.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
+  python run.py infid ./data/test_mavendata_documentid.txt ./result_inf_docid.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
 elif [ "$1" = "test-without-cuda" ]
 then
   python run.py test ./data/test.txt ./result.txt  ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth
