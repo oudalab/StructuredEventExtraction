@@ -45,17 +45,20 @@ def read_inference_docid(filepath):
     sentences = []
     ids = []
     sent= ['<START>']
+    id = [""]
     with open(filepath, 'r', encoding='utf8') as f:
         for line in f:
             if line == '\n':
                 if len(sent) > 1:
                     sentences.append(sent + ['<END>'])
+                    ids.append(id + [""])
                 sent = ['<START>']
+                #id = [""]
             else:
                 line = line.split()
                 sent.append(line[0])
-            ids.append(line[1])
-    return sentences
+                id.append(line[1])
+    return sentences, ids
 
 
 

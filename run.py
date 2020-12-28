@@ -208,9 +208,9 @@ def predict_documentid(args):
     sent_vocab = Vocab.load(args['SENT_VOCAB'])
     # add in directory of the inference dataset
     tag_vocab = Vocab.load(args['TAG_VOCAB'])
-    sentences, ids = utils.read_inference(args['INF'])
+    sentences, ids = utils.read_inference_docid(args['INF'])
     sentences = utils.words2indices(sentences, sent_vocab)
-    test_data = list(zip(sentences))
+    test_data = list(zip(sentences, ids))
     print('num of test samples: %d' % (len(test_data)))
 
     device = torch.device('cuda' if args['--cuda'] else 'cpu')
@@ -221,14 +221,14 @@ def predict_documentid(args):
     result_file = open(args['RESULT'], 'w')
     model.eval()
     with torch.no_grad():
-        for sentences, ids in utils.batch_iter_inf(test_data, batch_size=int(args['--batch-size']), shuffle=False):
+        for sentences, ids in utils.batch_iter(test_data, batch_size=int(args['--batch-size']), shuffle=False):
             padded_sentences, sent_lengths = utils.pad(sentences, sent_vocab[sent_vocab.PAD], device)
             predicted_tags = model.predict(padded_sentences, sent_lengths)
             for sent, pred_tags, id in zip(sentences, predicted_tags, ids):
                 sent, pred_tags = sent[1: -1], pred_tags[1: -1]
-                for token, pred_tag in zip(sent, pred_tags):
+                for token, pred_tag id_token in zip(sent, pred_tags, id):
                     result_file.write(' '.join([sent_vocab.id2word(token),
-                                                tag_vocab.id2word(pred_tag), id]) + '\n')
+                                                tag_vocab.id2word(pred_tag), id_token]) + '\n')
                 result_file.write('\n')
 
 
