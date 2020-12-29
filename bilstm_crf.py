@@ -3,10 +3,11 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from vocab import Vocab
 import utils
+import numpy as np
 
 
 class BiLSTMCRF(nn.Module):
-    def __init__(self, sent_vocab, tag_vocab, dropout_rate=0.5, embed_size=256, hidden_size=256):
+    def __init__(self, weights_matrix, sent_vocab, tag_vocab, dropout_rate=0.5, embed_size=256, hidden_size=256):
         """ Initialize the model
         Args:
             sent_vocab (Vocab): vocabulary of words
@@ -20,7 +21,8 @@ class BiLSTMCRF(nn.Module):
         self.hidden_size = hidden_size
         self.sent_vocab = sent_vocab
         self.tag_vocab = tag_vocab
-        self.embedding = nn.Embedding(len(sent_vocab), embed_size)
+        #self.embedding = nn.Embedding(len(sent_vocab), embed_size)
+        self.embedding,  num_embeddings,  embedding_dim = self.create_emb_layer(weights_matrix, True)
         self.dropout = nn.Dropout(dropout_rate)
         self.encoder = nn.LSTM(input_size=embed_size, hidden_size=hidden_size, bidirectional=True)
         self.hidden2emit_score = nn.Linear(hidden_size * 2, len(self.tag_vocab))
@@ -42,6 +44,16 @@ class BiLSTMCRF(nn.Module):
         emit_score = self.encode(sentences, sen_lengths)  # shape: (b, len, K)
         loss = self.cal_loss(tags, mask, emit_score)  # shape: (b,)
         return loss
+
+
+    def create_emb_layer(self, weights_matrix, non_trainable=False):
+        num_embeddings, embedding_dim = weights_matrix.size()
+        emb_layer = nn.Embedding(num_embeddings, embedding_dim)
+        emb_layer.load_state_dict({'weight': weights_matrix})
+        if non_trainable:
+            emb_layer.weight.requires_grad = False
+        return emb_layer, num_embeddings, embedding_dim
+
 
     def encode(self, sentences, sent_lengths):
         """ BiLSTM Encoder
@@ -146,9 +158,18 @@ class BiLSTMCRF(nn.Module):
 def main():
     sent_vocab = Vocab.load('./vocab/sent_vocab.json')
     tag_vocab = Vocab.load('./vocab/tag_vocab.json')
-    train_data, dev_data = utils.generate_train_dev_dataset('./data/train.txt', sent_vocab, tag_vocab)
+    #train_data, dev_data = utils.generate_train_dev_dataset('./data/train.txt', sent_vocab, tag_vocab)
     device = torch.device('cpu')
-    model = BiLSTMCRF(sent_vocab, tag_vocab)
+
+    word_emb = utils.get_word_embedding('./vocab/glove.6B.50d.txt')
+    matrix_len = len(sent_vocab)
+    weights_matrix = np.zeros((matrix_len, 50))
+    for i, word in enumerate(sent_vocab):
+        try:
+            weights_matrix[i] = word_emb[word]
+        except KeyError:
+            weights_matrix[i] = np.random.normal(scale=0.6, size=(emb_dim,))
+    model = BiLSTMCRF(weights_matrix, sent_vocab, tag_vocab, embed_size=50)
     model.to(device)
     model.save('./model/model.pth')
     model = model.load('./model/model.pth', device)

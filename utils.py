@@ -26,6 +26,18 @@ def read_corpus(filepath):
     return sentences, tags
 
 
+def get_word_embedding(pretrained_word_embedding_file):
+    word_embedding = {}
+    f = open(pretrained_word_embedding_file, encoding="utf-8")
+    for line in f:
+        values = line.split()
+        word = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        word_embedding[word] = coefs
+    f.close()
+    return word_embedding
+
+
 def read_inference(filepath):
     sentences = []
     sent= ['<START>']
