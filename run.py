@@ -40,6 +40,7 @@ def train(args):
         args: dict that contains options in command
     """
     sent_vocab = Vocab.load(args['SENT_VOCAB'])
+    word2id = sent_vocab.get_word2id()
     tag_vocab = Vocab.load(args['TAG_VOCAB'])
     #train_data, dev_data = utils.generate_train_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
     train_data = utils.generate_train_or_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
@@ -57,10 +58,10 @@ def train(args):
     patience, decay_num = 0, 0
 
     word_emb = utils.get_word_embedding('./vocab/glove.6B.50d.txt')
-    matrix_len = len(sent_vocab)
+    matrix_len = len(word2id)
     weights_matrix = np.zeros((matrix_len, 50))
 
-    for i, word in enumerate(sent_vocab):
+    for word, i in enumerate(word2id):
         try:
             weights_matrix[i] = word_emb[word]
         except KeyError:
