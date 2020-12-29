@@ -56,8 +56,19 @@ def train(args):
     device = torch.device('cuda' if args['--cuda'] else 'cpu')
     patience, decay_num = 0, 0
 
-    model = bilstm_crf.BiLSTMCRF(sent_vocab, tag_vocab, float(args['--dropout-rate']), int(args['--embed-size']),
+    word_emb = utils.get_word_embedding('./vocab/glove.6B.50d.txt')
+    matrix_len = len(sent_vocab)
+    weights_matrix = np.zeros((matrix_len, 50))
+
+    for i, word in enumerate(sent_vocab):
+        try:
+            weights_matrix[i] = word_emb[word]
+        except KeyError:
+            weights_matrix[i] = np.random.normal(scale=0.6, size=(emb_dim,))
+    #int(args['--embed-size']
+    model = bilstm_crf.BiLSTMCRF(sent_vocab, tag_vocab, float(args['--dropout-rate']), 50,
                                  int(args['--hidden-size'])).to(device)
+
     for name, param in model.named_parameters():
         if 'weight' in name:
             nn.init.normal_(param.data, 0, 0.01)

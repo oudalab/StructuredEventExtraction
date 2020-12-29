@@ -161,14 +161,7 @@ def main():
     #train_data, dev_data = utils.generate_train_dev_dataset('./data/train.txt', sent_vocab, tag_vocab)
     device = torch.device('cpu')
 
-    word_emb = utils.get_word_embedding('./vocab/glove.6B.50d.txt')
-    matrix_len = len(sent_vocab)
-    weights_matrix = np.zeros((matrix_len, 50))
-    for i, word in enumerate(sent_vocab):
-        try:
-            weights_matrix[i] = word_emb[word]
-        except KeyError:
-            weights_matrix[i] = np.random.normal(scale=0.6, size=(emb_dim,))
+
     model = BiLSTMCRF(weights_matrix, sent_vocab, tag_vocab, embed_size=50)
     model.to(device)
     model.save('./model/model.pth')
