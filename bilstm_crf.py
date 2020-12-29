@@ -22,6 +22,7 @@ class BiLSTMCRF(nn.Module):
         self.sent_vocab = sent_vocab
         self.tag_vocab = tag_vocab
         #self.embedding = nn.Embedding(len(sent_vocab), embed_size)
+        #setting to true means it is non-trainable
         self.embedding,  num_embeddings,  embedding_dim = self.create_emb_layer(weights_matrix, True)
         self.dropout = nn.Dropout(dropout_rate)
         self.encoder = nn.LSTM(input_size=embed_size, hidden_size=hidden_size, bidirectional=True)
@@ -145,7 +146,7 @@ class BiLSTMCRF(nn.Module):
     @staticmethod
     def load(filepath, device_to_load):
         params = torch.load(filepath, map_location=lambda storage, loc: storage)
-        model = BiLSTMCRF(params['sent_vocab'], params['tag_vocab'], **params['args'])
+        model = BiLSTMCRF(utils.generate_weights_metrics(), params['sent_vocab'], params['tag_vocab'], **params['args'])
         model.load_state_dict(params['state_dict'])
         model.to(device_to_load)
         return model

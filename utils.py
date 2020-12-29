@@ -1,5 +1,6 @@
 import random
 import torch
+import numpy as np
 
 
 def read_corpus(filepath):
@@ -194,6 +195,18 @@ def pad(data, padded_token, device):
 def print_var(**kwargs):
     for k, v in kwargs.items():
         print(k, v)
+
+def generate_weights_metrics():
+    word_emb = utils.get_word_embedding('./vocab/glove.6B.50d.txt')
+    matrix_len = len(word2id)
+    weights_matrix = np.zeros((matrix_len, 50))
+
+    for i, word in enumerate(word2id):
+        try:
+            weights_matrix[i] = word_emb[word]
+        except KeyError:
+            weights_matrix[i] = np.random.normal(scale=0.6, size=(50,))
+    return torch.tensor(weights_matrix)
 
 
 def main():
