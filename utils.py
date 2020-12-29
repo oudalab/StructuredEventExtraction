@@ -196,9 +196,9 @@ def print_var(**kwargs):
     for k, v in kwargs.items():
         print(k, v)
 
-def generate_weights_metrics(args_sent_vocab):
+def generate_weights_metrics(sent_vocab):
     word_emb = get_word_embedding('./vocab/glove.6B.50d.txt')
-    sent_vocab = Vocab.load(args_sent_vocab)
+    #sent_vocab = Vocab.load(args_sent_vocab)
     word2id = sent_vocab.get_word2id()
     matrix_len = len(word2id)
     weights_matrix = np.zeros((matrix_len, 50))
