@@ -146,7 +146,7 @@ class BiLSTMCRF(nn.Module):
     @staticmethod
     def load(filepath, device_to_load):
         params = torch.load(filepath, map_location=lambda storage, loc: storage)
-        model = BiLSTMCRF(utils.generate_weights_metrics(), params['sent_vocab'], params['tag_vocab'], **params['args'])
+        model = BiLSTMCRF(utils.generate_weights_metrics(params['sent_vocab']), params['sent_vocab'], params['tag_vocab'], **params['args'])
         model.load_state_dict(params['state_dict'])
         model.to(device_to_load)
         return model

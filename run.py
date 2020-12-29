@@ -41,7 +41,7 @@ def train(args):
         args: dict that contains options in command
     """
     sent_vocab = Vocab.load(args['SENT_VOCAB'])
-    word2id = sent_vocab.get_word2id()
+    #word2id = sent_vocab.get_word2id()
     tag_vocab = Vocab.load(args['TAG_VOCAB'])
     #train_data, dev_data = utils.generate_train_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
     train_data = utils.generate_train_or_dev_dataset(args['TRAIN'], sent_vocab, tag_vocab)
@@ -59,7 +59,7 @@ def train(args):
     patience, decay_num = 0, 0
 
     #int(args['--embed-size']
-    model = bilstm_crf.BiLSTMCRF(utils.generate_weights_metrics(), sent_vocab, tag_vocab, float(args['--dropout-rate']), 50,
+    model = bilstm_crf.BiLSTMCRF(utils.generate_weights_metrics(args['SENT_VOCAB']), sent_vocab, tag_vocab, float(args['--dropout-rate']), 50,
                                  int(args['--hidden-size'])).to(device)
 
     for name, param in model.named_parameters():
