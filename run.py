@@ -226,7 +226,7 @@ def predict_documentid(args):
             predicted_tags = model.predict(padded_sentences, sent_lengths)
             for sent, pred_tags, id in zip(sentences, predicted_tags, ids):
                 sent, pred_tags = sent[1: -1], pred_tags[1: -1]
-                for token, pred_tag id_token in zip(sent, pred_tags, id):
+                for token, pred_tag, id_token in zip(sent, pred_tags, id):
                     result_file.write(' '.join([sent_vocab.id2word(token),
                                                 tag_vocab.id2word(pred_tag), id_token]) + '\n')
                 result_file.write('\n')
@@ -260,6 +260,8 @@ def cal_dev_loss(model, dev_data, batch_size, sent_vocab, tag_vocab, device):
 
 def main():
     args = docopt(__doc__)
+    #import pdb
+    #pdb.set_trace()
     random.seed(0)
     torch.manual_seed(0)
     if args['--cuda']:

@@ -65,7 +65,7 @@ def read_inference_docid(filepath):
                     sentences.append(sent + ['<END>'])
                     ids.append(id + [""])
                 sent = ['<START>']
-                #id = [""]
+                id = [""]
             else:
                 line = line.split()
                 sent.append(line[0])
