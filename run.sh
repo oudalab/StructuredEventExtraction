@@ -2,14 +2,14 @@
 
 if [ "$1" = "train" ]
 then
-  python run.py train ./data/train_mavendata.txt ./data/dev_ref_mavendata.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json --cuda
+  python run.py train ./data/train_dev_mavendata.txt ./data/dev_ref_mavendata.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json --cuda
 elif [ "$1" = "train-without-cuda" ]
 then
-  python run.py train ./data/train.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json
+  python run.py train ./data/train.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json max-epoch=30
 elif [ "$1" = "test" ]
 then
-  python run.py test ./data/test.txt ./result.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
-  perl conlleval.pl < result.txt
+  python run.py test ./data/dev_ref_mavendata.txt ./dev_ref.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda
+  perl conlleval.pl < dev_ref.txt
 elif [ "$1" = "inf" ]
 then
   python run.py inf ./data/dev_inf_mavendata.txt ./result_inf.txt ./vocab/sent_vocab.json ./vocab/tag_vocab.json ./model/model.pth --cuda

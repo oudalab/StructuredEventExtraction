@@ -185,7 +185,7 @@ def pad(data, padded_token, device):
         lengths: lengths of batches, a list of length b.
     """
     lengths = [len(sent) for sent in data]
-    max_len = lengths[0]
+    max_len = max(lengths) #lengths[0]
     padded_data = []
     for s in data:
         padded_data.append(s + [padded_token] * (max_len - len(s)))

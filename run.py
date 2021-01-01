@@ -6,17 +6,17 @@ Usage:
     run.py infid INF RESULT SENT_VOCAB TAG_VOCAB MODEL [options]
 
 Options:
-    --dropout-rate=<float>              dropout rate [default: 0.5]
+    --dropout-rate=<float>              dropout rate [default: 0.3]
     --embed-size=<int>                  size of word embedding [default: 256]
-    --hidden-size=<int>                 size of hidden state [default: 256]
-    --batch-size=<int>                  batch-size [default: 32]
-    --max-epoch=<int>                   max epoch [default: 10]
-    --clip_max_norm=<float>             clip max norm [default: 5.0]
+    --hidden-size=<int>                 size of hidden state [default: 200]
+    --batch-size=<int>                  batch-size [default: 8]
+    --max-epoch=<int>                   max epoch [default: 20]
+    --clip_max_norm=<float>             clip max norm [default: 100000]
     --lr=<float>                        learning rate [default: 0.001]
     --log-every=<int>                   log every [default: 10]
     --validation-every=<int>            validation every [default: 250]
-    --patience-threshold=<float>        patience threshold [default: 0.98]
-    --max-patience=<int>                time of continuous worse performance to decay lr [default: 4]
+    --patience-threshold=<float>        patience threshold [default: 1]
+    --max-patience=<int>                time of continuous worse performance to decay lr [default: 1000]
     --max-decay=<int>                   time of lr decay to early stop [default: 4]
     --lr-decay=<float>                  decay rate of lr [default: 0.5]
     --model-save-path=<file>            model save path [default: ./model/model.pth]
@@ -59,7 +59,7 @@ def train(args):
     patience, decay_num = 0, 0
 
     #int(args['--embed-size']
-    model = bilstm_crf.BiLSTMCRF(utils.generate_weights_metrics(args['SENT_VOCAB']), sent_vocab, tag_vocab, float(args['--dropout-rate']), 50,
+    model = bilstm_crf.BiLSTMCRF(utils.generate_weights_metrics(sent_vocab), sent_vocab, tag_vocab, float(args['--dropout-rate']), int(args['--embed-size']),
                                  int(args['--hidden-size'])).to(device)
 
     for name, param in model.named_parameters():
@@ -99,20 +99,20 @@ def train(args):
             cum_tgt_word_sum += sum(sent_lengths)
 
             if train_iter % log_every == 0:
-                print('log: epoch %d, iter %d, %.1f words/sec, avg_loss %f, time %.1f sec' %
-                      (epoch + 1, train_iter, record_tgt_word_sum / (time.time() - record_start),
-                       record_loss_sum / record_batch_size, time.time() - record_start))
+                #print('log: epoch %d, iter %d, %.1f words/sec, avg_loss %f, time %.1f sec' %
+                     # (epoch + 1, train_iter, record_tgt_word_sum / (time.time() - record_start),
+                      # record_loss_sum / record_batch_size, time.time() - record_start))
                 record_loss_sum, record_batch_size, record_tgt_word_sum = 0, 0, 0
                 record_start = time.time()
 
             if train_iter % validation_every == 0:
-                print('dev: epoch %d, iter %d, %.1f words/sec, avg_loss %f, time %.1f sec' %
-                      (epoch + 1, train_iter, cum_tgt_word_sum / (time.time() - cum_start),
-                       cum_loss_sum / cum_batch_size, time.time() - cum_start))
+                #print('dev: epoch %d, iter %d, %.1f words/sec, avg_loss %f, time %.1f sec' %
+                 #     (epoch + 1, train_iter, cum_tgt_word_sum / (time.time() - cum_start),
+                  #     cum_loss_sum / cum_batch_size, time.time() - cum_start))
                 cum_loss_sum, cum_batch_size, cum_tgt_word_sum = 0, 0, 0
 
                 dev_loss = cal_dev_loss(model, dev_data, 64, sent_vocab, tag_vocab, device)
-                if dev_loss < min_dev_loss * float(args['--patience-threshold']):
+                if dev_loss < min_dev_loss: #* float(args['--patience-threshold']):
                     min_dev_loss = dev_loss
                     model.save(model_save_path)
                     torch.save(optimizer.state_dict(), optimizer_save_path)

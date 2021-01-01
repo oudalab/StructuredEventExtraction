@@ -7,7 +7,7 @@ import numpy as np
 
 
 class BiLSTMCRF(nn.Module):
-    def __init__(self, weights_matrix, sent_vocab, tag_vocab, dropout_rate=0.5, embed_size=256, hidden_size=256):
+    def __init__(self, weights_matrix, sent_vocab, tag_vocab, dropout_rate=0.3, embed_size=100, hidden_size=200):
         """ Initialize the model
         Args:
             sent_vocab (Vocab): vocabulary of words
@@ -21,9 +21,9 @@ class BiLSTMCRF(nn.Module):
         self.hidden_size = hidden_size
         self.sent_vocab = sent_vocab
         self.tag_vocab = tag_vocab
-        #self.embedding = nn.Embedding(len(sent_vocab), embed_size)
+        self.embedding = nn.Embedding(len(sent_vocab), embed_size)
         #setting to true means it is non-trainable
-        self.embedding,  num_embeddings,  embedding_dim = self.create_emb_layer(weights_matrix, True)
+        #self.embedding,  num_embeddings,  embedding_dim = self.create_emb_layer(weights_matrix, True)
         self.dropout = nn.Dropout(dropout_rate)
         self.encoder = nn.LSTM(input_size=embed_size, hidden_size=hidden_size, bidirectional=True)
         self.hidden2emit_score = nn.Linear(hidden_size * 2, len(self.tag_vocab))
@@ -146,8 +146,10 @@ class BiLSTMCRF(nn.Module):
     @staticmethod
     def load(filepath, device_to_load):
         params = torch.load(filepath, map_location=lambda storage, loc: storage)
-        sent_vocab = Vocab.load(params['sent_vocab'])
-        model = BiLSTMCRF(utils.generate_weights_metrics(sent_vocab), params['sent_vocab'], params['tag_vocab'], **params['args'])
+        #import pdb
+        #pdb.set_trace()
+        #sent_vocab = Vocab.load(params['sent_vocab'])
+        model = BiLSTMCRF(utils.generate_weights_metrics(params['sent_vocab']), params['sent_vocab'], params['tag_vocab'], **params['args'])
         model.load_state_dict(params['state_dict'])
         model.to(device_to_load)
         return model
