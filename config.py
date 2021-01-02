@@ -1,7 +1,7 @@
 class Config(object):
 	apr_dir = '../model/'
 	data_dir = '../data/'
-	model_name = 'model_4.pt'
+	model_name = 'model_1.pt'
 	epoch = 5
 	bert_model = 'bert-base-cased'
 	lr = 5e-5

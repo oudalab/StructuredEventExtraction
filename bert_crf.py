@@ -135,9 +135,9 @@ def pad(batch):
     return tok_ids, attn_mask, org_tok_map, labels, sents, list(sorted_idx.cpu().numpy())
 
 
-class BERTCRF(BertPreTrainedModel):
+class Bert_CRF(BertPreTrainedModel):
     def __init__(self, config):
-        super(BERTCRF,self).__init__(config)
+        super(Bert_CRF, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -189,6 +189,18 @@ def generate_test_data(config, tag2idx, bert_tokenizer="bert-base", do_lower_cas
     test_data = config.data_dir+config.test_data
     test_sentences, test_labels, _ = corpus_reader(test_data, delim=' ')
     test_dataset = NER_Dataset(tag2idx, test_sentences, test_labels, tokenizer_path = bert_tokenizer, do_lower_case=do_lower_case)
+    test_iter = data.DataLoader(dataset=test_dataset,
+                                batch_size=config.batch_size,
+                                shuffle=False,
+                                num_workers=1,
+                                collate_fn=pad)
+    return test_iter
+
+
+def generate_inf_data(config, tag2idx, bert_tokenizer="bert-base", do_lower_case=True):
+    test_data = config.data_dir+config.test_data
+    test_sentences, doc_ids, _ = corpus_reader(test_data, delim=' ')
+    test_dataset = NER_Dataset(tag2idx, test_sentences, doc_ids, tokenizer_path = bert_tokenizer, do_lower_case=do_lower_case)
     test_iter = data.DataLoader(dataset=test_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
@@ -346,6 +358,36 @@ def test(config, test_iter, model, unique_labels, test_output):
     print(result)
 
 
+def inf(config, test_iter, model, unique_labels, test_output):
+    model.eval()
+    writer = open(config.apr_dir + test_output, 'w')
+    for i, batch in enumerate(test_iter):
+        token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
+        # attn_mask.dt
+        inputs = {'input_ids': token_ids.to(device),
+                  'attn_masks': attn_mask.to(device)
+                  }
+        with torch.torch.no_grad():
+            tag_seqs = model(**inputs)
+        y_true = list(labels.cpu().numpy())
+        for i in range(len(sorted_idx)):
+            o2m = org_tok_map[i]
+            pos = sorted_idx.index(i)
+            for j, orig_tok_idx in enumerate(o2m):
+                writer.write(original_token[i][j] + '\t')
+                writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
+                pred_tag = unique_labels[tag_seqs[pos][orig_tok_idx]]
+                if pred_tag == 'X':
+                    pred_tag = 'O'
+                writer.write(pred_tag + '\n')
+            writer.write('\n')
+    writer.flush()
+    #command = "python conlleval.py < " + config.apr_dir + test_output
+    #process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+    #result = process.communicate()[0].decode("utf-8")
+    #print(result)
+
+
 def parse_raw_data(padded_raw_data, model, unique_labels, out_file_name='raw_prediction.csv'):
     model.eval()
     token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = padded_raw_data
@@ -456,6 +498,11 @@ if __name__ == "__main__":
         test_iter = generate_test_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(test_iter))
         test(config, test_iter, model, unique_labels, config.test_out)
+    elif options.model_model == "infid":
+        model, bert_tokenizer, unique_labels, tag2idx = load_model(config=config, do_lower_case=True)
+        inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
+        print('test len: ', len(inf_iter))
+        inf(config, inf_iter, model, unique_labels, config.test_out)
     elif options.model_mode == "raw_text":
         if config.raw_text == None:
             print('Please provide the raw text path on config.raw_text')
