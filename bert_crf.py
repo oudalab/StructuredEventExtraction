@@ -375,7 +375,7 @@ def inf(config, test_iter, model, unique_labels, test_output):
             pos = sorted_idx.index(i)
             for j, orig_tok_idx in enumerate(o2m):
                 writer.write(original_token[i][j] + '\t')
-                writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
+                #writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
                 pred_tag = unique_labels[tag_seqs[pos][orig_tok_idx]]
                 if pred_tag == 'X':
                     pred_tag = 'O'
@@ -498,7 +498,7 @@ if __name__ == "__main__":
         test_iter = generate_test_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(test_iter))
         test(config, test_iter, model, unique_labels, config.test_out)
-    elif options.model_model == "infid":
+    elif options.model_mode == "infid":
         model, bert_tokenizer, unique_labels, tag2idx = load_model(config=config, do_lower_case=True)
         inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(inf_iter))

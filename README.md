@@ -21,6 +21,8 @@ For testing, you can use the following command:
 ```
 sh run.sh test
 ```
+For getting the inference result only, you can use the following command:
+python3 bert_crf.py --mode infid
 Also, if you have no GPU, you can use the following command(this procedure won't take long time when using CPU):
 ```
 sh run.sh test-without-cuda
@@ -51,3 +53,4 @@ accuracy:  97.70%; precision:  85.16%; recall:  77.84%; FB1:  81.34
 ## Reference
   1. [Bidirectional LSTM-CRF Models for Sequence Tagging](https://arxiv.org/abs/1508.01991)
   2. [cs224n Assignment 4](http://web.stanford.edu/class/cs224n/index.html#schedule)
+  3. https://github.com/Dhanachandra/bert_crf
