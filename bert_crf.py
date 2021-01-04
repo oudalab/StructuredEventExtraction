@@ -109,47 +109,6 @@ class NER_Dataset(data.Dataset):
             modified_labels = modified_labels[:512]
         return token_ids, len(token_ids), orig_to_tok_map, modified_labels, self.sentences[idx]
 
-class NER_Dataset_Docid(data.Dataset):
-    def __init__(self, tag2idx, sentences, labels, tokenizer_path = '', do_lower_case=True):
-        self.tag2idx = tag2idx
-        self.sentences = sentences
-        self.labels = labels
-        self.tokenizer = BertTokenizer.from_pretrained(tokenizer_path, do_lower_case=do_lower_case)
-
-    def __len__(self):
-        return len(self.sentences)
-
-    def __getitem__(self, idx):
-        sentence = self.sentences[idx]
-        label = []
-        for x in self.labels[idx]:
-            # if x in self.tag2idx.keys():
-            #     label.append(self.tag2idx[x])
-            # else:
-            #     label.append(self.tag2idx['O'])
-            label.append(x)
-        bert_tokens = []
-        orig_to_tok_map = []
-        bert_tokens.append('[CLS]')
-        #append dummy label 'X' for subtokens
-        modified_labels = [self.tag2idx['X']]
-        for i, token in enumerate(sentence):
-            if len(bert_tokens) >= 512:
-                break
-            orig_to_tok_map.append(len(bert_tokens))
-            modified_labels.append(label[i])
-            new_token = self.tokenizer.tokenize(token)
-            bert_tokens.extend(new_token)
-            modified_labels.extend([self.tag2idx['X']] * (len(new_token) -1))
-
-        bert_tokens.append('[SEP]')
-        modified_labels.append(self.tag2idx['X'])
-        token_ids = self.tokenizer.convert_tokens_to_ids(bert_tokens)
-        if len(token_ids) > 511:
-            token_ids = token_ids[:512]
-            modified_labels = modified_labels[:512]
-        return token_ids, len(token_ids), orig_to_tok_map, modified_labels, self.sentences[idx]
-
 
 def pad(batch):
     '''Pads to the longest sample'''
@@ -241,7 +200,7 @@ def generate_test_data(config, tag2idx, bert_tokenizer="bert-base", do_lower_cas
 def generate_inf_data(config, tag2idx, bert_tokenizer="bert-base", do_lower_case=True):
     test_data = config.data_dir+config.test_data
     test_sentences, doc_ids, _ = corpus_reader(test_data, delim=' ')
-    test_dataset = NER_Dataset_Docid(tag2idx, test_sentences, doc_ids, tokenizer_path = bert_tokenizer, do_lower_case=do_lower_case)
+    test_dataset = NER_Dataset(tag2idx, test_sentences, doc_ids, tokenizer_path = bert_tokenizer, do_lower_case=do_lower_case)
     test_iter = data.DataLoader(dataset=test_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
@@ -416,11 +375,11 @@ def inf(config, test_iter, model, unique_labels, test_output):
             pos = sorted_idx.index(i)
             for j, orig_tok_idx in enumerate(o2m):
                 writer.write(original_token[i][j] + '\t')
+                writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
                 pred_tag = unique_labels[tag_seqs[pos][orig_tok_idx]]
                 if pred_tag == 'X':
                     pred_tag = 'O'
-                writer.write(pred_tag + '\t')
-                writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\n')
+                writer.write(pred_tag + '\n')
             writer.write('\n')
     writer.flush()
     #command = "python conlleval.py < " + config.apr_dir + test_output
@@ -539,7 +498,7 @@ if __name__ == "__main__":
         test_iter = generate_test_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(test_iter))
         test(config, test_iter, model, unique_labels, config.test_out)
-    elif options.model_mode == "infid":
+    elif options.model_model == "infid":
         model, bert_tokenizer, unique_labels, tag2idx = load_model(config=config, do_lower_case=True)
         inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(inf_iter))
