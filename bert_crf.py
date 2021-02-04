@@ -288,20 +288,20 @@ def generate_training_data(config, bert_tokenizer="bert-base", do_lower_case=Tru
 
 def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_case=True):
     training_data, validation_data = config.data_dir + config.training_data, config.data_dir + config.val_data
-    train_sentences, train_labels, label_set, topic_set = corpus_reader_topic(training_data, delim=',')
+    train_sentences, train_labels, train_topics, label_set, topic_set = corpus_reader_topic(training_data, delim=',')
     label_set.append('X')
     tag2idx = {t: i for i, t in enumerate(label_set)}
     topic2idx = {t: i for i, t in enumerate(topic_set)}
     # print('Training datas: ', len(train_sentences))
-    train_dataset = NER_Dataset_topic(tag2idx, topic2idx, train_sentences, train_labels, tokenizer_path=bert_tokenizer,
+    train_dataset = NER_Dataset_topic(tag2idx, topic2idx, train_sentences, train_labels, train_topics, tokenizer_path=bert_tokenizer,
                                 do_lower_case=do_lower_case)
     # save the tag2indx dictionary. Will be used while prediction
     with open(config.apr_dir + 'tag2idx.pkl', 'wb') as f:
         pickle.dump(tag2idx, f, pickle.HIGHEST_PROTOCOL)
     with open(config.apr_dir + 'topic2idx.pkl', 'wb') as f:
         pickle.dump(topic2idx, f, pickle.HIGHEST_PROTOCOL)
-    dev_sentences, dev_labels, _ = corpus_reader_topic(validation_data, delim=',')
-    dev_dataset = NER_Dataset_topic(tag2idx, topic2idx, dev_sentences, dev_labels, tokenizer_path=bert_tokenizer,
+    dev_sentences, dev_labels, dev_topics,_,_ = corpus_reader_topic(validation_data, delim=',')
+    dev_dataset = NER_Dataset_topic(tag2idx, topic2idx, dev_sentences, dev_labels, dev_topics, tokenizer_path=bert_tokenizer,
                               do_lower_case=do_lower_case)
 
     # print(len(train_dataset))
