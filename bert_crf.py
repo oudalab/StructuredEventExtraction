@@ -74,6 +74,7 @@ def corpus_reader_topic(path, delim='\t', word_idx=0, label_idx=1, topic_idx=-1)
     tmp_tok, tmp_lab, tmp_topic = [], [], []
     label_set = []
     topic_set = []
+    delim = ","
     with open(path, 'r') as reader:
         for line in reader:
             line = line.strip()
@@ -149,7 +150,9 @@ class NER_Dataset_topic(data.Dataset):
     def __getitem__(self, idx):
         sentence = self.sentences[idx]
         #generate the index for the topic
-        topic = self.topic2idx(self.topics[idx])
+        #print("yan type: {}, topics: {}".format(type(self.topics),self.topics))
+        topic = self.topic2idx[self.topics[idx][0]]
+        print("yan topic:{}, topic id:{}".format(topic, self.topics[idx][0]))
         label = []
         for x in self.labels[idx]:
             if x in self.tag2idx.keys():
@@ -183,6 +186,11 @@ def pad(batch):
     get_element = lambda x: [sample[x] for sample in batch]
     seq_len = get_element(1)
     maxlen = np.array(seq_len).max()
+    print("yan yan")
+    import pdb
+    print("yan yan 1")
+    pdb.set_trace()
+    print("yan yan 2")
     do_pad = lambda x, seqlen: [sample[x] + [0] * (seqlen - len(sample[x])) for sample in batch] # 0: <pad>
     tok_ids = do_pad(0, maxlen)
     attn_mask = [[(i>0) for i in ids] for ids in tok_ids]
@@ -196,6 +204,7 @@ def pad(batch):
 
     tok_ids = LT(tok_ids)[sorted_idx]
     attn_mask = LT(attn_mask)[sorted_idx]
+    print("sorted idx: {}".format(sorted_idx))
     labels = LT(label)[sorted_idx]
     org_tok_map = get_element(2)
     sents = get_element(-1)
@@ -229,9 +238,9 @@ class Bert_CRF(BertPreTrainedModel):
 
 class Bert_CRF_topic(BertPreTrainedModel):
     def __init__(self, config):
-        super(Bert_CRF, self).__init__(config)
+        super(Bert_CRF_topic, self).__init__(config)
         self.num_labels = config.num_labels
-        self.num_topics = config.num_topics
+        self.num_topics = 81 #config.num_topics
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, self.num_labels)
@@ -308,12 +317,12 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
     train_iter = data.DataLoader(dataset=train_dataset,
                                  batch_size=config.batch_size,
                                  shuffle=True,
-                                 num_workers=4,
+                                 num_workers=0,
                                  collate_fn=pad)
     eval_iter = data.DataLoader(dataset=dev_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
-                                num_workers=1,
+                                num_workers=0,
                                 collate_fn=pad)
     return train_iter, eval_iter, tag2idx, topic2idx
 
@@ -459,7 +468,7 @@ def train(train_iter, eval_iter, tag2idx, config, bert_model="bert-base-uncased"
 def train_topic(train_iter, eval_iter, tag2idx, topic2idx, config, bert_model="bert-base-uncased"):
     # print('#Tags: ', len(tag2idx))
     unique_labels = list(tag2idx.keys())
-    model = Bert_CRF_topic.from_pretrained(bert_model, num_labels=len(tag2idx), num_topics=len(topic2idx))
+    model = Bert_CRF_topic.from_pretrained(bert_model, num_labels=len(tag2idx))
     model.train()
     if torch.cuda.is_available():
         model.cuda()
