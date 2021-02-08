@@ -74,7 +74,7 @@ def corpus_reader_topic(path, delim='\t', word_idx=0, label_idx=1, topic_idx=-1)
     tmp_tok, tmp_lab, tmp_topic = [], [], []
     label_set = []
     topic_set = []
-    delim = ","
+    delim = "|"
     with open(path, 'r') as reader:
         for line in reader:
             line = line.strip()
@@ -136,7 +136,7 @@ class NER_Dataset(data.Dataset):
 
 
 class NER_Dataset_topic(data.Dataset):
-    def __init__(self, tag2idx, topic2idx, sentences, labels, topics, tokenizer_path = '', do_lower_case=True):
+    def __init__(self, tag2idx, sentences, labels, topic2idx, topics, tokenizer_path = '', do_lower_case=True):
         self.tag2idx = tag2idx
         self.topic2idx = topic2idx
         self.sentences = sentences
@@ -152,7 +152,7 @@ class NER_Dataset_topic(data.Dataset):
         #generate the index for the topic
         #print("yan type: {}, topics: {}".format(type(self.topics),self.topics))
         topic = self.topic2idx[self.topics[idx][0]]
-        print("yan topic:{}, topic id:{}".format(topic, self.topics[idx][0]))
+        #print("yan topic:{}, topic id:{}".format(topic, self.topics[idx][0]))
         label = []
         for x in self.labels[idx]:
             if x in self.tag2idx.keys():
@@ -179,6 +179,8 @@ class NER_Dataset_topic(data.Dataset):
         if len(token_ids) > 511:
             token_ids = token_ids[:512]
             modified_labels = modified_labels[:512]
+        #len(token_ids)
+        # bert_tokens, label
         return token_ids, len(token_ids), orig_to_tok_map, modified_labels, sentence, topic
 
 def pad(batch):
@@ -186,11 +188,6 @@ def pad(batch):
     get_element = lambda x: [sample[x] for sample in batch]
     seq_len = get_element(1)
     maxlen = np.array(seq_len).max()
-    print("yan yan")
-    import pdb
-    print("yan yan 1")
-    pdb.set_trace()
-    print("yan yan 2")
     do_pad = lambda x, seqlen: [sample[x] + [0] * (seqlen - len(sample[x])) for sample in batch] # 0: <pad>
     tok_ids = do_pad(0, maxlen)
     attn_mask = [[(i>0) for i in ids] for ids in tok_ids]
@@ -204,13 +201,39 @@ def pad(batch):
 
     tok_ids = LT(tok_ids)[sorted_idx]
     attn_mask = LT(attn_mask)[sorted_idx]
-    print("sorted idx: {}".format(sorted_idx))
+    #print("sorted idx: {}".format(sorted_idx))
     labels = LT(label)[sorted_idx]
     org_tok_map = get_element(2)
     sents = get_element(-1)
 
     return tok_ids, attn_mask, org_tok_map, labels, sents, list(sorted_idx.cpu().numpy())
 
+def pad_topic(batch):
+    '''Pads to the longest sample'''
+    get_element = lambda x: [sample[x] for sample in batch]
+    seq_len = get_element(1)
+    maxlen = np.array(seq_len).max()
+    do_pad = lambda x, seqlen: [sample[x] + [0] * (seqlen - len(sample[x])) for sample in batch] # 0: <pad>
+    tok_ids = do_pad(0, maxlen)
+    attn_mask = [[(i>0) for i in ids] for ids in tok_ids]
+    LT = torch.LongTensor
+    label = do_pad(3, maxlen)
+
+    # sort the index, attn mask and labels on token length
+    token_ids = get_element(0)
+    token_ids_len = torch.LongTensor(list(map(len, token_ids)))
+    _, sorted_idx = token_ids_len.sort(0, descending=True)
+
+    tok_ids = LT(tok_ids)[sorted_idx]
+    attn_mask = LT(attn_mask)[sorted_idx]
+    #print("sorted idx: {}".format(sorted_idx))
+    labels = LT(label)[sorted_idx]
+    org_tok_map = get_element(2)
+    sents = get_element(-2)
+    topics = get_element(-1)
+    topics = LT(topics)[sorted_idx]
+
+    return tok_ids, attn_mask, org_tok_map, labels, sents, topics, list(sorted_idx.cpu().numpy())
 
 class Bert_CRF(BertPreTrainedModel):
     def __init__(self, config):
@@ -285,8 +308,10 @@ def generate_training_data(config, bert_tokenizer="bert-base", do_lower_case=Tru
     train_iter = data.DataLoader(dataset=train_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=True,
-                                num_workers=4,
+                                num_workers=0,
                                 collate_fn=pad)
+    # import pdb
+    # pdb.set_trace()
     eval_iter = data.DataLoader(dataset=dev_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
@@ -302,7 +327,7 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
     tag2idx = {t: i for i, t in enumerate(label_set)}
     topic2idx = {t: i for i, t in enumerate(topic_set)}
     # print('Training datas: ', len(train_sentences))
-    train_dataset = NER_Dataset_topic(tag2idx, topic2idx, train_sentences, train_labels, train_topics, tokenizer_path=bert_tokenizer,
+    train_dataset = NER_Dataset_topic(tag2idx, train_sentences, train_labels, topic2idx, train_topics, tokenizer_path=bert_tokenizer,
                                 do_lower_case=do_lower_case)
     # save the tag2indx dictionary. Will be used while prediction
     with open(config.apr_dir + 'tag2idx.pkl', 'wb') as f:
@@ -310,7 +335,7 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
     with open(config.apr_dir + 'topic2idx.pkl', 'wb') as f:
         pickle.dump(topic2idx, f, pickle.HIGHEST_PROTOCOL)
     dev_sentences, dev_labels, dev_topics,_,_ = corpus_reader_topic(validation_data, delim=',')
-    dev_dataset = NER_Dataset_topic(tag2idx, topic2idx, dev_sentences, dev_labels, dev_topics, tokenizer_path=bert_tokenizer,
+    dev_dataset = NER_Dataset_topic(tag2idx, dev_sentences, dev_labels, topic2idx, dev_topics, tokenizer_path=bert_tokenizer,
                               do_lower_case=do_lower_case)
 
     # print(len(train_dataset))
@@ -318,12 +343,12 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
                                  batch_size=config.batch_size,
                                  shuffle=True,
                                  num_workers=0,
-                                 collate_fn=pad)
+                                 collate_fn=pad_topic)
     eval_iter = data.DataLoader(dataset=dev_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
                                 num_workers=0,
-                                collate_fn=pad)
+                                collate_fn=pad_topic)
     return train_iter, eval_iter, tag2idx, topic2idx
 
 
@@ -386,7 +411,11 @@ def train(train_iter, eval_iter, tag2idx, config, bert_model="bert-base-uncased"
         model.train()
         for step, batch in enumerate(epoch_iterator):
             s = timeit.default_timer()
-            token_ids, attn_mask, _, labels, _, _ = batch
+            #token_ids, attn_mask, _, labels, _, _ = batch
+            token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
+            print("yan test batch")
+            # import pdb
+            # pdb.set_trace()
             # print(labels)
             inputs = {'input_ids': token_ids.to(device),
                       'attn_masks': attn_mask.to(device),
@@ -500,12 +529,11 @@ def train_topic(train_iter, eval_iter, tag2idx, topic2idx, config, bert_model="b
         model.train()
         for step, batch in enumerate(epoch_iterator):
             s = timeit.default_timer()
-            token_ids, attn_mask, _, labels, _, topic, _ = batch
-            # print(labels)
+            token_ids, attn_mask, _, labels, _, topics,_ = batch
             inputs = {'input_ids': token_ids.to(device),
                       'attn_masks': attn_mask.to(device),
                       'labels': labels.to(device),
-                      'topic_label': topic.to(device),
+                      'topic_label': topics.to(device),
                       }
             loss = model(**inputs)
             loss.backward()
@@ -533,16 +561,20 @@ def train_topic(train_iter, eval_iter, tag2idx, topic2idx, config, bert_model="b
         model.eval()
         writer = open(config.apr_dir + 'prediction_' + str(epoch) + '.csv', 'w')
         for i, batch in enumerate(eval_iter):
-            token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
+            token_ids, attn_mask, org_tok_map, labels, original_token, topics, sorted_idx = batch
             # attn_mask.dt
             inputs = {'input_ids': token_ids.to(device),
-                      'attn_masks': attn_mask.to(device)
+                      'attn_masks': attn_mask.to(device),
+                      'topic_label': topics.to(device),
                       }
 
             dev_inputs = {'input_ids': token_ids.to(device),
                           'attn_masks': attn_mask.to(device),
+                          'topic_label': topics.to(device),
                           'labels': labels.to(device)
                           }
+            # import pdb
+            # pdb.set_trace()
             with torch.torch.no_grad():
                 tag_seqs = model(**inputs)
                 tmp_eval_loss = model(**dev_inputs)
