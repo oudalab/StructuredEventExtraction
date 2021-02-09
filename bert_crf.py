@@ -74,7 +74,7 @@ def corpus_reader_topic(path, delim='\t', word_idx=0, label_idx=1, topic_idx=-1)
     tmp_tok, tmp_lab, tmp_topic = [], [], []
     label_set = []
     topic_set = []
-    delim = ","
+    delim = "|"
     with open(path, 'r') as reader:
         for line in reader:
             line = line.strip()
@@ -136,7 +136,7 @@ class NER_Dataset(data.Dataset):
 
 
 class NER_Dataset_topic(data.Dataset):
-    def __init__(self, tag2idx, topic2idx, sentences, labels, topics, tokenizer_path = '', do_lower_case=True):
+    def __init__(self, tag2idx, sentences, labels, topic2idx, topics, tokenizer_path = '', do_lower_case=True):
         self.tag2idx = tag2idx
         self.topic2idx = topic2idx
         self.sentences = sentences
@@ -151,8 +151,9 @@ class NER_Dataset_topic(data.Dataset):
         sentence = self.sentences[idx]
         #generate the index for the topic
         #print("yan type: {}, topics: {}".format(type(self.topics),self.topics))
-        topic = self.topic2idx[self.topics[idx][0]]
-        print("yan topic:{}, topic id:{}".format(topic, self.topics[idx][0]))
+        raw_topic = self.topics[idx][0]
+        topic = self.topic2idx[raw_topic]
+        #print("yan topic:{}, topic id:{}".format(topic, self.topics[idx][0]))
         label = []
         for x in self.labels[idx]:
             if x in self.tag2idx.keys():
@@ -160,6 +161,7 @@ class NER_Dataset_topic(data.Dataset):
             else:
                 label.append(self.tag2idx['O'])
         bert_tokens = []
+        bert_tokens_topic = []
         orig_to_tok_map = []
         bert_tokens.append('[CLS]')
         #append dummy label 'X' for subtokens
@@ -179,18 +181,18 @@ class NER_Dataset_topic(data.Dataset):
         if len(token_ids) > 511:
             token_ids = token_ids[:512]
             modified_labels = modified_labels[:512]
-        return token_ids, len(token_ids), orig_to_tok_map, modified_labels, sentence, topic
+        #preparing topic tokens
+        for i, token in enumerate(raw_topic.split(" ")):
+            new_token = self.tokenizer.tokenize(token)
+            bert_tokens_topic.extend(new_token)
+        token_ids_topic = self.tokenizer.convert_tokens_to_ids(bert_tokens_topic)
+        return token_ids, len(token_ids), orig_to_tok_map, modified_labels, sentence, topic, token_ids_topic
 
 def pad(batch):
     '''Pads to the longest sample'''
     get_element = lambda x: [sample[x] for sample in batch]
     seq_len = get_element(1)
     maxlen = np.array(seq_len).max()
-    print("yan yan")
-    import pdb
-    print("yan yan 1")
-    pdb.set_trace()
-    print("yan yan 2")
     do_pad = lambda x, seqlen: [sample[x] + [0] * (seqlen - len(sample[x])) for sample in batch] # 0: <pad>
     tok_ids = do_pad(0, maxlen)
     attn_mask = [[(i>0) for i in ids] for ids in tok_ids]
@@ -204,13 +206,46 @@ def pad(batch):
 
     tok_ids = LT(tok_ids)[sorted_idx]
     attn_mask = LT(attn_mask)[sorted_idx]
-    print("sorted idx: {}".format(sorted_idx))
+    #print("sorted idx: {}".format(sorted_idx))
     labels = LT(label)[sorted_idx]
     org_tok_map = get_element(2)
     sents = get_element(-1)
 
     return tok_ids, attn_mask, org_tok_map, labels, sents, list(sorted_idx.cpu().numpy())
 
+def pad_topic(batch):
+    '''Pads to the longest sample'''
+    get_element = lambda x: [sample[x] for sample in batch]
+    seq_len = get_element(1)
+    maxlen = np.array(seq_len).max()
+    do_pad = lambda x, seqlen: [sample[x] + [0] * (seqlen - len(sample[x])) for sample in batch] # 0: <pad>
+    tok_ids = do_pad(0, maxlen)
+    attn_mask = [[(i>0) for i in ids] for ids in tok_ids]
+    LT = torch.LongTensor
+    label = do_pad(3, maxlen)
+
+    # sort the index, attn mask and labels on token length
+    token_ids = get_element(0)
+    token_ids_len = torch.LongTensor(list(map(len, token_ids)))
+    _, sorted_idx = token_ids_len.sort(0, descending=True)
+
+    tok_ids = LT(tok_ids)[sorted_idx]
+    attn_mask = LT(attn_mask)[sorted_idx]
+    #print("sorted idx: {}".format(sorted_idx))
+    labels = LT(label)[sorted_idx]
+    org_tok_map = get_element(2)
+    sents = get_element(4)
+    topics = get_element(5)
+    tok_ids_topic = get_element(6)
+    topics = LT(topics)[sorted_idx]
+    seq_len_topic = [len(i) for i in tok_ids_topic]
+    maxlen_topic = np.array(seq_len_topic).max()
+    tok_ids_topic_pad = do_pad(6, maxlen_topic)
+    attn_mask_topic = [[(i > 0) for i in ids] for ids in tok_ids_topic_pad]
+    attn_mask_topic = LT(attn_mask_topic)[sorted_idx]
+    tok_ids_topic = LT(tok_ids_topic_pad)[sorted_idx]
+
+    return tok_ids, attn_mask, org_tok_map, labels, sents, topics, list(sorted_idx.cpu().numpy()), tok_ids_topic, attn_mask_topic
 
 class Bert_CRF(BertPreTrainedModel):
     def __init__(self, config):
@@ -248,14 +283,33 @@ class Bert_CRF_topic(BertPreTrainedModel):
         self.init_weights()
         self.crf = CRF(self.num_labels, batch_first=True)
 
-    def forward(self, input_ids, attn_masks, labels=None, topic_label=None):  # dont confuse this with _forward_alg above.
+    def forward(self, input_ids, attn_masks, labels=None, topic_label=None, input_ids_topic=None, attn_masks_topic=None):  # dont confuse this with _forward_alg above.
         outputs = self.bert(input_ids, attn_masks)
-        sequence_output = outputs[0]
-        sequence_output = self.dropout(sequence_output)
-        emission = self.classifier(sequence_output)
+        outputs_topic = self.bert(input_ids_topic, attn_masks_topic)
+        # import pdb
+        # pdb.set_trace()
+        sequence_output = outputs[0]   # (batch_size, sequence_length, embedding_dim)
+        #using the pooling at the topic input
+        cls_topic = outputs_topic[1]
+        batch_size_topic = cls_topic.shape[0]
+        dim_topic = cls_topic.shape[-1]
+        expanded_topic = sequence_output.shape[1]
+        # a.unsqueeze_(-1)
+        # a = a.expand(3, 3, 10)
+        # https://discuss.pytorch.org/t/expand-a-2d-tensor-to-3d-tensor/9614
+        cls_topic_new = cls_topic.unsqueeze(-2)
+        cls_topic_new = cls_topic_new.expand(batch_size_topic, expanded_topic, dim_topic)
+        # now they are at the same dimension can be added
+        sequence_output_topic = sequence_output + cls_topic_new
+
+        # import pdb
+        # pdb.set_trace()
+        sequence_output_topic = self.dropout(sequence_output_topic)
+        emission = self.classifier(sequence_output_topic)
         attn_masks = attn_masks.type(torch.uint8)
         loss_cross = nn.CrossEntropyLoss()
         cls_output = outputs[1]
+        #using cls_output to avoid information leaking
         topic = self.topic_classifier(cls_output)
 
         if labels is not None:
@@ -285,8 +339,10 @@ def generate_training_data(config, bert_tokenizer="bert-base", do_lower_case=Tru
     train_iter = data.DataLoader(dataset=train_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=True,
-                                num_workers=4,
+                                num_workers=0,
                                 collate_fn=pad)
+    # import pdb
+    # pdb.set_trace()
     eval_iter = data.DataLoader(dataset=dev_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
@@ -302,7 +358,7 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
     tag2idx = {t: i for i, t in enumerate(label_set)}
     topic2idx = {t: i for i, t in enumerate(topic_set)}
     # print('Training datas: ', len(train_sentences))
-    train_dataset = NER_Dataset_topic(tag2idx, topic2idx, train_sentences, train_labels, train_topics, tokenizer_path=bert_tokenizer,
+    train_dataset = NER_Dataset_topic(tag2idx, train_sentences, train_labels, topic2idx, train_topics, tokenizer_path=bert_tokenizer,
                                 do_lower_case=do_lower_case)
     # save the tag2indx dictionary. Will be used while prediction
     with open(config.apr_dir + 'tag2idx.pkl', 'wb') as f:
@@ -310,7 +366,7 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
     with open(config.apr_dir + 'topic2idx.pkl', 'wb') as f:
         pickle.dump(topic2idx, f, pickle.HIGHEST_PROTOCOL)
     dev_sentences, dev_labels, dev_topics,_,_ = corpus_reader_topic(validation_data, delim=',')
-    dev_dataset = NER_Dataset_topic(tag2idx, topic2idx, dev_sentences, dev_labels, dev_topics, tokenizer_path=bert_tokenizer,
+    dev_dataset = NER_Dataset_topic(tag2idx, dev_sentences, dev_labels, topic2idx, dev_topics, tokenizer_path=bert_tokenizer,
                               do_lower_case=do_lower_case)
 
     # print(len(train_dataset))
@@ -318,12 +374,12 @@ def generate_training_data_topic(config, bert_tokenizer='bert-base', do_lower_ca
                                  batch_size=config.batch_size,
                                  shuffle=True,
                                  num_workers=0,
-                                 collate_fn=pad)
+                                 collate_fn=pad_topic)
     eval_iter = data.DataLoader(dataset=dev_dataset,
                                 batch_size=config.batch_size,
                                 shuffle=False,
                                 num_workers=0,
-                                collate_fn=pad)
+                                collate_fn=pad_topic)
     return train_iter, eval_iter, tag2idx, topic2idx
 
 
@@ -386,7 +442,11 @@ def train(train_iter, eval_iter, tag2idx, config, bert_model="bert-base-uncased"
         model.train()
         for step, batch in enumerate(epoch_iterator):
             s = timeit.default_timer()
-            token_ids, attn_mask, _, labels, _, _ = batch
+            #token_ids, attn_mask, _, labels, _, _ = batch
+            token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
+            # print("yan test batch")
+            # import pdb
+            # pdb.set_trace()
             # print(labels)
             inputs = {'input_ids': token_ids.to(device),
                       'attn_masks': attn_mask.to(device),
@@ -500,12 +560,13 @@ def train_topic(train_iter, eval_iter, tag2idx, topic2idx, config, bert_model="b
         model.train()
         for step, batch in enumerate(epoch_iterator):
             s = timeit.default_timer()
-            token_ids, attn_mask, _, labels, _, topic, _ = batch
-            # print(labels)
+            token_ids, attn_mask, _, labels, _, topics,_ , input_ids_topic, attn_mask_topic = batch
             inputs = {'input_ids': token_ids.to(device),
                       'attn_masks': attn_mask.to(device),
                       'labels': labels.to(device),
-                      'topic_label': topic.to(device),
+                      'topic_label': topics.to(device),
+                      'input_ids_topic': input_ids_topic.to(device),
+                      'attn_masks_topic': attn_mask_topic.to(device)
                       }
             loss = model(**inputs)
             loss.backward()
@@ -533,16 +594,24 @@ def train_topic(train_iter, eval_iter, tag2idx, topic2idx, config, bert_model="b
         model.eval()
         writer = open(config.apr_dir + 'prediction_' + str(epoch) + '.csv', 'w')
         for i, batch in enumerate(eval_iter):
-            token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
+            token_ids, attn_mask, org_tok_map, labels, original_token, topics, sorted_idx, token_ids_topic, attn_mask_topic = batch
             # attn_mask.dt
             inputs = {'input_ids': token_ids.to(device),
-                      'attn_masks': attn_mask.to(device)
+                      'attn_masks': attn_mask.to(device),
+                      'topic_label': topics.to(device),
+                      'input_ids_topic': token_ids_topic.to(device),
+                      'attn_masks_topic': attn_mask_topic.to(device)
                       }
 
             dev_inputs = {'input_ids': token_ids.to(device),
                           'attn_masks': attn_mask.to(device),
-                          'labels': labels.to(device)
+                          'topic_label': topics.to(device),
+                          'labels': labels.to(device),
+                          'input_ids_topic': token_ids_topic.to(device),
+                          'attn_masks_topic': attn_mask_topic.to(device)
                           }
+            # import pdb
+            # pdb.set_trace()
             with torch.torch.no_grad():
                 tag_seqs = model(**inputs)
                 tmp_eval_loss = model(**dev_inputs)
@@ -564,10 +633,10 @@ def train_topic(train_iter, eval_iter, tag2idx, topic2idx, config, bert_model="b
         validation_loss.append(val_loss / len(eval_iter))
         writer.flush()
         print('Epoch: ', epoch)
-        command = "python conlleval.py < " + config.apr_dir + "prediction_" + str(epoch) + ".csv"
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-        result = process.communicate()[0].decode("utf-8")
-        print(result)
+        # command = "python conlleval.py < " + config.apr_dir + "prediction_" + str(epoch) + ".csv"
+        # process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+        # result = process.communicate()[0].decode("utf-8")
+        # print(result)
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -624,7 +693,7 @@ def inf(config, test_iter, model, unique_labels, test_output):
                   }
         with torch.torch.no_grad():
             tag_seqs = model(**inputs)
-        y_true = list(labels.cpu().numpy())
+        #y_true = list(labels.cpu().numpy())
         for i in range(len(sorted_idx)):
             o2m = org_tok_map[i]
             pos = sorted_idx.index(i)
@@ -637,10 +706,32 @@ def inf(config, test_iter, model, unique_labels, test_output):
                 writer.write(pred_tag + '\n')
             writer.write('\n')
     writer.flush()
-    #command = "python conlleval.py < " + config.apr_dir + test_output
-    #process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-    #result = process.communicate()[0].decode("utf-8")
-    #print(result)
+
+def inf_topic(config, test_iter, model, unique_labels, test_output):
+    model.eval()
+    writer = open(config.apr_dir + test_output, 'w')
+    for i, batch in enumerate(test_iter):
+        token_ids, attn_mask, org_tok_map, labels, original_token, topics, sorted_idx = batch
+        # attn_mask.dt
+        inputs = {'input_ids': token_ids.to(device),
+                  'attn_masks': attn_mask.to(device),
+                  'topic_label': topics.to(device)
+                  }
+        with torch.torch.no_grad():
+            tag_seqs = model(**inputs)
+        #y_true = list(labels.cpu().numpy())
+        for i in range(len(sorted_idx)):
+            o2m = org_tok_map[i]
+            pos = sorted_idx.index(i)
+            for j, orig_tok_idx in enumerate(o2m):
+                writer.write(original_token[i][j] + '\t')
+                #writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
+                pred_tag = unique_labels[tag_seqs[pos][orig_tok_idx]]
+                if pred_tag == 'X':
+                    pred_tag = 'O'
+                writer.write(pred_tag + '\n')
+            writer.write('\n')
+    writer.flush()
 
 
 def parse_raw_data(padded_raw_data, model, unique_labels, out_file_name='raw_prediction.csv'):
@@ -684,6 +775,20 @@ def load_model(config, do_lower_case=True):
     tag2idx = pickle.load(f)
     unique_labels = list(tag2idx.keys())
     model = Bert_CRF.from_pretrained(config.bert_model, num_labels=len(tag2idx))
+    checkpoint = torch.load(config.apr_dir + config.model_name, map_location='cpu')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    global bert_tokenizer
+    bert_tokenizer = BertTokenizer.from_pretrained(config.bert_model, do_lower_case=do_lower_case)
+    if torch.cuda.is_available():
+        model.cuda()
+    model.eval()
+    return model, bert_tokenizer, unique_labels, tag2idx
+
+def load_model_topic(config, do_lower_case=True):
+    f = open(config.apr_dir + 'tag2idx.pkl', 'rb')
+    tag2idx = pickle.load(f)
+    unique_labels = list(tag2idx.keys())
+    model = Bert_CRF_topic.from_pretrained(config.bert_model, num_labels=len(tag2idx))
     checkpoint = torch.load(config.apr_dir + config.model_name, map_location='cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
     global bert_tokenizer
@@ -763,11 +868,15 @@ if __name__ == "__main__":
         inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(inf_iter))
         inf(config, inf_iter, model, unique_labels, config.test_out)
+    elif options.model_mode == "infid_topic":
+        model, bert_tokenizer, unique_labels, tag2idx = load_model_topic(config=config, do_lower_case=True)
+        inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
+        print('test len: ', len(inf_iter))
+        inf(config, inf_iter, model, unique_labels, config.test_out)
     elif options.model_mode == "raw_text":
         if config.raw_text == None:
             print('Please provide the raw text path on config.raw_text')
             import sys
-
             sys.exit(1)
         model, bert_tokenizer, unique_labels, tag2idx = load_model(config=config, do_lower_case=True)
         doc = open(config.raw_text).read()
