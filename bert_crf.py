@@ -444,7 +444,6 @@ def train(train_iter, eval_iter, tag2idx, config, bert_model="bert-base-uncased"
             s = timeit.default_timer()
             #token_ids, attn_mask, _, labels, _, _ = batch
             token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
-            # print("yan test batch")
             # import pdb
             # pdb.set_trace()
             # print(labels)
