@@ -152,7 +152,10 @@ class NER_Dataset_topic(data.Dataset):
         #generate the index for the topic
         #print("yan type: {}, topics: {}".format(type(self.topics),self.topics))
         raw_topic = self.topics[idx][0]
-        topic = self.topic2idx[raw_topic]
+        if raw_topic not in self.topic2idx:
+            topic = 9 #default to event, since some of the testing topic never been seen in the training dataset
+        else:
+            topic = self.topic2idx[raw_topic]
         #print("yan topic:{}, topic id:{}".format(topic, self.topics[idx][0]))
         label = []
         for x in self.labels[idx]:
@@ -270,15 +273,79 @@ class Bert_CRF(BertPreTrainedModel):
             prediction = self.crf.decode(emission, mask=attn_masks)
             return prediction
 
+class BiLSTM_CRF(nn.Module):
+    #def __init__(self, sent_vocab, tag_vocab, dropout_rate=0.5, embed_size=256, hidden_size=256):
+    def __init__(self, num_labels):
+        super(BiLSTM_CRF, self).__init__()
+        self.dropout_rate = 0.5 #dropout_rate
+        self.embed_size = 256 #embed_size
+        self.hidden_size = 256 #hidden_size
+        self.num_labels = num_labels
+        # self.sent_vocab = sent_vocab
+        # self.tag_vocab = tag_vocab
+        self.embedding = nn.Embedding(29000, self.embed_size)  #len(sent_vocab)
+        self.dropout = nn.Dropout(self.dropout_rate)
+        self.encoder = nn.LSTM(input_size=self.embed_size, hidden_size=self.hidden_size, bidirectional=True)
+        self.hidden2emit_score = nn.Linear(self.hidden_size * 2, self.num_labels)
+        self.crf = CRF(self.num_labels, batch_first=True)
+
+    #def forward(self, sentences, tags, sen_lengths, labels=None):
+    def forward(self, input_ids, attn_masks, labels=None):
+        """
+        Args:
+            sentences (tensor): sentences, shape (b, len). Lengths are in decreasing order, len is the length
+                                of the longest sentence
+            tags (tensor): corresponding tags, shape (b, len)
+            sen_lengths (list): sentence lengths
+        Returns:
+            loss (tensor): loss on the batch, shape (b,)
+        """
+        #mask = (sentences != self.sent_vocab[self.sent_vocab.PAD]).to(self.device)  # shape: (b, len)
+        #sentences = sentences.transpose(0, 1)  # shape: (len, b)
+        # import pdb
+        # pdb.set_trace()
+        sentences = self.embedding(input_ids)  # shape: (len, b, e)
+        #sentences = sentences.transpose(0, 1)
+        hidden_states, _ = self.encoder(sentences)
+        emit_score = self.hidden2emit_score(hidden_states)
+        # otherwise runtime error: *** RuntimeError: all only supports torch.uint8 and torch.bool dtypes
+        attn_masks = attn_masks.type(torch.uint8)
+        #emit_score = self.encode(sentences, sen_lengths)  # shape: (b, len, K)
+        #loss = self.cal_loss(tags, mask, emit_score)  # shape: (b,)
+        if labels is not None:
+            loss = -self.crf(log_soft(emit_score, 2), labels, mask=attn_masks, reduction='mean')
+            return loss
+        else:
+            prediction = self.crf.decode(emit_score, mask=attn_masks)
+            return prediction
+
+
+    #def encode(self, sentences, sent_lengths):
+    # def encode(self, input_ids):
+    #     """ BiLSTM Encoder
+    #     Args:
+    #         sentences (tensor): sentences with word embeddings, shape (len, b, e)
+    #         sent_lengths (list): sentence lengths
+    #     Returns:
+    #         emit_score (tensor): emit score, shape (b, len, K)
+    #     """
+    #     #padded_sentences = pack_padded_sequence(sentences, sent_lengths)
+    #     #hidden_states, _ = self.encoder(padded_sentences)
+    #     hidden_states, _ = self.encoder(input_ids)
+    #     ## ToDo: this needs to be checked, how does it know the mask
+    #     hidden_states, _ = pad_packed_sequence(hidden_states, batch_first=True)  # shape: (b, len, 2h)
+    #     emit_score = self.hidden2emit_score(hidden_states)  # shape: (b, len, K)
+    #     emit_score = self.dropout(emit_score)  # shape: (b, len, K)
+    #     return emit_score
 
 class Bert_CRF_topic(BertPreTrainedModel):
     def __init__(self, config):
         super(Bert_CRF_topic, self).__init__(config)
         self.num_labels = config.num_labels
-        self.num_topics = 81 #config.num_topics
+        self.num_topics = 26 #32 #51 #22 #21 5_33 #config.num_topics #81 is all the topics in training data
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, self.num_labels)
+        self.classifier = nn.Linear(config.hidden_size*2, self.num_labels)
         self.topic_classifier = nn.Linear(config.hidden_size, self.num_topics)
         self.init_weights()
         self.crf = CRF(self.num_labels, batch_first=True)
@@ -300,8 +367,10 @@ class Bert_CRF_topic(BertPreTrainedModel):
         cls_topic_new = cls_topic.unsqueeze(-2)
         cls_topic_new = cls_topic_new.expand(batch_size_topic, expanded_topic, dim_topic)
         # now they are at the same dimension can be added
-        sequence_output_topic = sequence_output + cls_topic_new
-
+        #import pdb
+        #pdb.set_trace()
+        #sequence_output_topic = sequence_output + cls_topic_new
+        sequence_output_topic = torch.cat((sequence_output, cls_topic_new), 2) #concat the last dimension 768
         # import pdb
         # pdb.set_trace()
         sequence_output_topic = self.dropout(sequence_output_topic)
@@ -315,7 +384,8 @@ class Bert_CRF_topic(BertPreTrainedModel):
         if labels is not None:
             loss_crf = -self.crf(log_soft(emission, 2), labels, mask=attn_masks, reduction='mean')
             loss_cls = loss_cross(topic, topic_label)
-            loss = loss_crf + loss_cls
+            loss = loss_crf + 10 * loss_cls
+            # loss = loss_crf
             return loss
         else:
             prediction = self.crf.decode(emission, mask=attn_masks)
@@ -406,11 +476,27 @@ def generate_inf_data(config, tag2idx, bert_tokenizer="bert-base", do_lower_case
                                 collate_fn=pad)
     return test_iter
 
+def generate_inf_data_topic(config, tag2idx, topic2idx, bert_tokenizer="bert-base", do_lower_case=True):
+    test_data = config.data_dir+config.test_data
+    test_sentences, docids, test_topics, _, topic_set = corpus_reader_topic(test_data, delim='|')
+    test_dataset = NER_Dataset_topic(tag2idx, test_sentences, docids, topic2idx, test_topics,
+                                      tokenizer_path=bert_tokenizer,
+                                      do_lower_case=do_lower_case)
+    test_iter = data.DataLoader(dataset=test_dataset,
+                                batch_size=config.batch_size,
+                                shuffle=False,
+                                num_workers=0,
+                                collate_fn=pad_topic)
+    return test_iter
+
 
 def train(train_iter, eval_iter, tag2idx, config, bert_model="bert-base-uncased"):
     # print('#Tags: ', len(tag2idx))
     unique_labels = list(tag2idx.keys())
-    model = Bert_CRF.from_pretrained(bert_model, num_labels=len(tag2idx))
+    if bert_model != None:
+        model = Bert_CRF.from_pretrained(bert_model, num_labels=len(tag2idx))
+    else:
+        model = BiLSTM_CRF(num_labels=len(tag2idx))
     model.train()
     if torch.cuda.is_available():
         model.cuda()
@@ -446,11 +532,12 @@ def train(train_iter, eval_iter, tag2idx, config, bert_model="bert-base-uncased"
             token_ids, attn_mask, org_tok_map, labels, original_token, sorted_idx = batch
             # import pdb
             # pdb.set_trace()
-            # print(labels)
             inputs = {'input_ids': token_ids.to(device),
                       'attn_masks': attn_mask.to(device),
                       'labels': labels.to(device)
                       }
+            # import pdb
+            # pdb.set_trace()
             loss = model(**inputs)
             loss.backward()
             tmp_loss += loss.item()
@@ -692,13 +779,13 @@ def inf(config, test_iter, model, unique_labels, test_output):
                   }
         with torch.torch.no_grad():
             tag_seqs = model(**inputs)
-        #y_true = list(labels.cpu().numpy())
+        y_true = list(labels.cpu().numpy())
         for i in range(len(sorted_idx)):
             o2m = org_tok_map[i]
             pos = sorted_idx.index(i)
             for j, orig_tok_idx in enumerate(o2m):
                 writer.write(original_token[i][j] + '\t')
-                #writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
+                writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
                 pred_tag = unique_labels[tag_seqs[pos][orig_tok_idx]]
                 if pred_tag == 'X':
                     pred_tag = 'O'
@@ -710,21 +797,22 @@ def inf_topic(config, test_iter, model, unique_labels, test_output):
     model.eval()
     writer = open(config.apr_dir + test_output, 'w')
     for i, batch in enumerate(test_iter):
-        token_ids, attn_mask, org_tok_map, labels, original_token, topics, sorted_idx = batch
+        token_ids, attn_mask, org_tok_map, labels, original_token, topics, sorted_idx, token_ids_topic, attn_mask_topic = batch
         # attn_mask.dt
         inputs = {'input_ids': token_ids.to(device),
                   'attn_masks': attn_mask.to(device),
-                  'topic_label': topics.to(device)
+                  'input_ids_topic': token_ids_topic.to(device),
+                  'attn_masks_topic': attn_mask_topic.to(device)
                   }
         with torch.torch.no_grad():
             tag_seqs = model(**inputs)
-        #y_true = list(labels.cpu().numpy())
+        y_true = list(labels.cpu().numpy())
         for i in range(len(sorted_idx)):
             o2m = org_tok_map[i]
             pos = sorted_idx.index(i)
             for j, orig_tok_idx in enumerate(o2m):
                 writer.write(original_token[i][j] + '\t')
-                #writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
+                writer.write(unique_labels[y_true[pos][orig_tok_idx]] + '\t')
                 pred_tag = unique_labels[tag_seqs[pos][orig_tok_idx]]
                 if pred_tag == 'X':
                     pred_tag = 'O'
@@ -769,11 +857,14 @@ def show_graph(training_loss, validation_loss, resource_dir):
     plt.savefig(resource_dir + 'Loss.png')
 
 
-def load_model(config, do_lower_case=True):
+def load_model(config, do_lower_case=True, from_bilstm=False):
     f = open(config.apr_dir + 'tag2idx.pkl', 'rb')
     tag2idx = pickle.load(f)
     unique_labels = list(tag2idx.keys())
-    model = Bert_CRF.from_pretrained(config.bert_model, num_labels=len(tag2idx))
+    if not from_bilstm:
+        model = Bert_CRF.from_pretrained(config.bert_model, num_labels=len(tag2idx))
+    else:
+        model = BiLSTM_CRF(num_labels=len(tag2idx))
     checkpoint = torch.load(config.apr_dir + config.model_name, map_location='cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
     global bert_tokenizer
@@ -786,6 +877,8 @@ def load_model(config, do_lower_case=True):
 def load_model_topic(config, do_lower_case=True):
     f = open(config.apr_dir + 'tag2idx.pkl', 'rb')
     tag2idx = pickle.load(f)
+    f_topic = open(config.apr_dir + 'topic2idx.pkl', 'rb')
+    topic2idx = pickle.load(f_topic)
     unique_labels = list(tag2idx.keys())
     model = Bert_CRF_topic.from_pretrained(config.bert_model, num_labels=len(tag2idx))
     checkpoint = torch.load(config.apr_dir + config.model_name, map_location='cpu')
@@ -795,7 +888,7 @@ def load_model_topic(config, do_lower_case=True):
     if torch.cuda.is_available():
         model.cuda()
     model.eval()
-    return model, bert_tokenizer, unique_labels, tag2idx
+    return model, bert_tokenizer, unique_labels, tag2idx, topic2idx
 
 
 def raw_processing(doc, bert_tokenizer, word_tokenizer):
@@ -852,6 +945,11 @@ if __name__ == "__main__":
                                                                 do_lower_case=True)
         t_loss, v_loss = train(train_iter, eval_iter, tag2idx, config=config, bert_model=config.bert_model)
         show_graph(t_loss, v_loss, config.apr_dir)
+    if options.model_mode == "train_bilstm":
+        train_iter, eval_iter, tag2idx = generate_training_data(config=config, bert_tokenizer=config.bert_model,
+                                                                do_lower_case=True)
+        t_loss, v_loss = train(train_iter, eval_iter, tag2idx, config=config, bert_model=None)
+        show_graph(t_loss, v_loss, config.apr_dir)
     if options.model_mode == "train_topic":
         train_iter, eval_iter, tag2idx, topic2idx = generate_training_data_topic(config=config, bert_tokenizer=config.bert_model,
                                                                 do_lower_case=True)
@@ -867,11 +965,18 @@ if __name__ == "__main__":
         inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(inf_iter))
         inf(config, inf_iter, model, unique_labels, config.test_out)
-    elif options.model_mode == "infid_topic":
-        model, bert_tokenizer, unique_labels, tag2idx = load_model_topic(config=config, do_lower_case=True)
+    elif options.model_mode == "infid_bilstm":
+        model, bert_tokenizer, unique_labels, tag2idx = load_model(config=config, do_lower_case=True, from_bilstm=True)
+        import pdb
+        pdb.set_trace()
         inf_iter = generate_inf_data(config, tag2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
         print('test len: ', len(inf_iter))
         inf(config, inf_iter, model, unique_labels, config.test_out)
+    elif options.model_mode == "infid_topic":
+        model, bert_tokenizer, unique_labels, tag2idx, topic2idx = load_model_topic(config=config, do_lower_case=True)
+        inf_iter = generate_inf_data_topic(config, tag2idx, topic2idx, bert_tokenizer=config.bert_model, do_lower_case=True)
+        print('test len: ', len(inf_iter))
+        inf_topic(config, inf_iter, model, unique_labels, config.test_out)
     elif options.model_mode == "raw_text":
         if config.raw_text == None:
             print('Please provide the raw text path on config.raw_text')

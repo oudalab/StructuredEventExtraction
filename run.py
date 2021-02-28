@@ -10,7 +10,7 @@ Options:
     --embed-size=<int>                  size of word embedding [default: 256]
     --hidden-size=<int>                 size of hidden state [default: 200]
     --batch-size=<int>                  batch-size [default: 8]
-    --max-epoch=<int>                   max epoch [default: 20]
+    --max-epoch=<int>                   max epoch [default: 10]
     --clip_max_norm=<float>             clip max norm [default: 100000]
     --lr=<float>                        learning rate [default: 0.001]
     --log-every=<int>                   log every [default: 10]
@@ -59,14 +59,16 @@ def train(args):
     patience, decay_num = 0, 0
 
     #int(args['--embed-size']
-    model = bilstm_crf.BiLSTMCRF(utils.generate_weights_metrics(sent_vocab), sent_vocab, tag_vocab, float(args['--dropout-rate']), int(args['--embed-size']),
+    # model = bilstm_crf.BiLSTMCRF(utils.generate_weights_metrics(sent_vocab), sent_vocab, tag_vocab, float(args['--dropout-rate']), int(args['--embed-size']),
+    #                              int(args['--hidden-size'])).to(device)
+    model = bilstm_crf.BiLSTMCRF(sent_vocab, tag_vocab, float(args['--dropout-rate']), int(args['--embed-size']),
                                  int(args['--hidden-size'])).to(device)
 
-    for name, param in model.named_parameters():
-        if 'weight' in name:
-            nn.init.normal_(param.data, 0, 0.01)
-        else:
-            nn.init.constant_(param.data, 0)
+    # for name, param in model.named_parameters():
+    #     if 'weight' in name:
+    #         nn.init.normal_(param.data, 0, 0.01)
+    #     else:
+    #         nn.init.constant_(param.data, 0)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=float(args['--lr']))
     train_iter = 0  # train iter num
